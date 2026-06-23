@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>UF Temps Réel</title>
+
+<style>
+.logo {
+  height:90px;
+}
+
+.filter-icon {
+  height:24px;
+}
+body {
+  margin:0;
+  font-family:Arial;
+  background:#1e2230;
+  color:white;
+  padding:20px;
+}
+
+.header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+button, select {
+  padding:6px 12px;
+  border:none;
+  border-radius:6px;
+  margin-right:5px;
+  cursor:pointer;
+}
+
+.active { background:#2ecc71; }
+
+.filter-container {
+  display:flex;
+  justify-content:center;
+  margin:20px 0;
+}
+
+.filter-bar {
+  display:flex;
+  gap:10px;
+  background:#2a2f3f;
+  padding:10px;
+  border-radius:12px;
+  width:100%;
+  max-width:900px;
+}
+
+.filter-input {
+  flex:1;
+  padding:6px;
+  border-radius:6px;
+  border:none;
+}
+
+.grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  gap:15px;
+}
+
+.card {
+  background:#2a2f3f;
+  border-radius:12px;
+  padding:15px;
+  position:relative;
+}
+
+.title { font-weight:bold; margin-bottom:10px; }
+
+.seuils {
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:10px;
+  font-size:13px;
+  text-align:center;
+}
+
+/* ===== EFFECTIFS ===== */
+.effectif div {
+  margin-bottom:4px;
+}
+
+.dot {
+  display:inline-block;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  margin-right:6px;
+}
+
+.d0 { background:#f1c40f; }
+.d8 { background:#3498db; }
+.d20 { background:#e74c3c; }
+.d30 { background:#9b59b6; }
+.inter { background:#2ecc71; }
+/* ===================== */
+
+/* pastille blanche */
+.totalBadge {
+  position:absolute;
+  top:10px;
+  right:10px;
+  background:white;
+  color:black;
+  border-radius:50%;
+  width:28px;
+  height:28px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:bold;
+}
+
+.alert {
+  margin-top:8px;
+  padding:6px;
+  border-radius:8px;
+  background:#e74c3c;
+  text-align:center;
+}
+
+.ok {
+  margin-top:8px;
+  padding:6px;
+  border-radius:8px;
+  background:#2ecc71;
+  text-align:center;
+}
+
+#status {
+  margin-top:10px;
+  font-size:18px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <h1>📊 UF Temps Réel</h1>
+  <img src="./images/logo.png" class="logo">
+</div>
+
+<div>
+  <button id="btnHiver" class="active">❄️ Hiver</button>
+  <button id="btnEte">☀️ Été</button>
+
+  <select id="seuilSelect">
+    <option value="mini">Mini</option>
+    <option value="bas" selected>Seuil bas</option>
+    <option value="cible">Cible</option>
+  </select>
+
+  <select id="triSelect">
+    <option value="auto" selected>Auto</option>
+    <option value="crit">Sous-effectif</option>
+    <option value="ok">OK</option>
+    <option value="none">Aucun</option>
+  </select>
+</div>
+
+<div class="filter-container">
+  <div class="filter-bar">
+	    <img src="./images/uf.png" class="filter-icon">
+    <input type="text" id="filterInput" class="filter-input" placeholder="🔎 Filtrer UF">
+    <label><input type="checkbox" id="filterSeuil" checked> Avec seuils</label>
+  </div>
+</div>
+
+<div class="filter-container">
+  <div class="filter-bar">
+    <select id="groupSelect" class="filter-input">
+      <option value="">-- Filtrer par groupement --</option>
+      <option value="group1">1 - SAINT CYR / BANDOL / BEAUSSET / CADIERE / SIGNES</option>
+      <option value="group2">2 - LA SEYNE / SANARY / SIX FOURS</option>
+      <option value="group3">3 - TOULON OUEST / TOULON CENTRE / OLLIOULES</option>
+      <option value="group4">4 - HYERES / LA GARDE / SOLLIES / SABRAN</option>
+      <option value="group5">5 - BORMES / LA LONDE / CAVALIERE</option>
+      <option value="group6">6 - CUERS / COLLOBRIERES / PIERREFEU / PUGET VILLE</option>
+      <option value="group7">7 - SAINT MAXIMIN / SAINT ZACHARIE / NANS LES PINS / PLAN D AUPS / POURRIERES</option>
+      <option value="group8">8 - GINASSERVIS / RIANS / VINON</option>
+      <option value="group9">9 - BARJOLS / COTIGNAC / CARCES</option>
+
+    </select>
+    <button id="resetGroup">Reset</button>
+  </div>
+</div>
+
+<div id="status">🟡 ORBE en attente</div>
+<div class="grid" id="grid"></div>
+
+<script src="ufData.js"></script>
+<script src="ufData2.js"></script>
+
+<script>
+
+const EXT_ID = "gbggoiakdhhfapgfdnmbflboeoiedhik";
+
+let mode="hiver";
+let seuilMode="bas";
+let triMode="auto";
+let currentData=[];
+let filterText="";
+let filterCisCodis=true;
+let selectedGroup="";
+
+// ===== NORMALIZE
+function normalize(str){
+  return String(str||"")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"")
+    .trim();
+}
+
+// ===== GROUPES
+const GROUPS = {
+  group1:["SAINT CYR","BANDOL","BEAUSSET","CADIERE","SIGNES"],
+  group2:["SEYNE","SANARY","SIX FOURS"],
+  group3:["TOULON OUEST","TOULON CENTRE","OLLIOULES"],
+  group4:["HYERES","GARDE","SOLLIES","SABRAN"],
+  group5:["BORMES","LA LONDE","CAVALIERE"],
+  group6:["CUERS","COLLOBRIERES","PIERREFEU","PUGET VILLE"],
+  group7:["SAINT MAXIMIN","SAINT ZACHARIE","NANS LES PINS","PLAN D AUPS", "POURRIERES"],
+  group8:["GINASSERVIS","RIANS","VINON SUR VERDON"],
+  group9:["BARJOLS","COTIGNAC","CARCES"]
+};
+
+// ===== EVENTS
+btnHiver.onclick=()=>{mode="hiver";btnHiver.classList.add("active");btnEte.classList.remove("active");render(currentData);}
+btnEte.onclick=()=>{mode="ete";btnEte.classList.add("active");btnHiver.classList.remove("active");render(currentData);}
+
+filterInput.oninput=e=>{filterText=e.target.value.toLowerCase();render(currentData);}
+filterSeuil.onchange=e=>{filterCisCodis=e.target.checked;render(currentData);}
+seuilSelect.onchange=e=>{seuilMode=e.target.value;render(currentData);}
+triSelect.onchange=e=>{triMode=e.target.value;render(currentData);}
+
+groupSelect.onchange=e=>{selectedGroup=e.target.value;render(currentData);}
+resetGroup.onclick=()=>{selectedGroup="";groupSelect.value="";render(currentData);}
+
+// ===== ORBE
+function fetchData(){
+  chrome.runtime.sendMessage(
+    EXT_ID,
+    { type:"GET_ORBE_DATA" },
+    (response)=>{
+      const status=document.getElementById("status");
+
+      if(chrome.runtime.lastError){
+        status.innerHTML="🔴 ORBE non connecté";
+        return;
+      }
+
+      if(!response || response.length===0){
+        status.innerHTML="🟡 ORBE en attente";
+        return;
+      }
+
+      currentData=response;
+      render(response);
+      status.innerHTML="🟢 ORBE connecté";
+    }
+  );
+}
+
+setInterval(fetchData,3000);
+fetchData();
+
+// ===== FIND UF
+function findUF(name){
+  const n = normalize(name);
+  const source = mode==="hiver"?ufData:ufData2;
+  for(const k in source){
+    if(normalize(k)===n) return source[k];
+  }
+  return null;
+}
+
+// ===== RENDER
+function render(data){
+
+  const grid=document.getElementById("grid");
+  grid.innerHTML="";
+
+  const periode=(new Date().getHours()>=8 && new Date().getHours()<20)?"jour":"nuit";
+
+  let result=[];
+
+  (data||[]).forEach(c=>{
+
+    if(!c.name) return;
+
+    const nameUpper=normalize(c.name);
+
+    if(filterText && !nameUpper.toLowerCase().includes(filterText)) return;
+    if(filterCisCodis && !(/^(CIS|CODIS)/.test(nameUpper))) return;
+
+    if(selectedGroup){
+      const match = GROUPS[selectedGroup].some(g => nameUpper.includes(normalize(g)));
+      if(!match) return;
+    }
+
+    const uf=findUF(c.name);
+
+    const inter=c.disponibilities?.[0]||0;
+    const d0=c.disponibilities?.[1]||0;
+    const d8=c.disponibilities?.[2]||0;
+    const d20=c.disponibilities?.[3]||0;
+    const d30=c.disponibilities?.[4]||0;
+
+    const total=d0+d8+d20+d30+inter;
+    const totalSansD30=d0+d8+d20+inter;
+
+    let seuil=null;
+    if(uf){
+      if(seuilMode==="mini") seuil=uf.mini?.[periode];
+      if(seuilMode==="bas") seuil=uf[periode];
+      if(seuilMode==="cible") seuil=uf.cible?.[periode];
+    }
+
+    const diff=seuil!==null?total-seuil:null;
+
+    result.push({name:c.name,d0,d8,d20,d30,inter,total,seuil,diff,uf,totalSansD30});
+  });
+
+  // TRI
+  if(triMode==="crit"){
+    result.sort((a,b)=>{
+      if(a.totalSansD30===0 && b.totalSansD30!==0) return -1;
+      if(a.totalSansD30!==0 && b.totalSansD30===0) return 1;
+
+      const aSous=a.diff!==null && a.diff<0;
+      const bSous=b.diff!==null && b.diff<0;
+
+      if(aSous && !bSous) return -1;
+      if(!aSous && bSous) return 1;
+
+      return (a.diff??999)-(b.diff??999);
+    });
+  }
+
+  if(triMode==="auto"){
+    result.sort((a,b)=>(a.diff??999)-(b.diff??999));
+  }
+
+  if(triMode==="ok"){
+    result.sort((a,b)=>(b.diff??-999)-(a.diff??-999));
+  }
+
+  result.forEach(c=>{
+
+    const card=document.createElement("div");
+    card.className="card";
+
+    if(c.totalSansD30===0){
+      card.style.background="#8b0000";
+    }
+
+    const totalBadge = `<div class="totalBadge">${c.totalSansD30}</div>`;
+
+    const seuilHTML=c.uf?`
+      <div class="seuils">
+        <div>MINI<br>🌞 ${c.uf.mini?.jour ?? "-"}<br>🌙 ${c.uf.mini?.nuit ?? "-"}</div>
+        <div>BAS<br>🌞 ${c.uf.jour ?? "-"}<br>🌙 ${c.uf.nuit ?? "-"}</div>
+        <div>CIBLE<br>🌞 ${c.uf.cible?.jour ?? "-"}<br>🌙 ${c.uf.cible?.nuit ?? "-"}</div>
+      </div>
+    `:"";
+
+    let alertHTML="";
+    if(c.seuil!==null){
+      if(c.diff<0) alertHTML=`<div class="alert">${c.diff}</div>`;
+      else if(c.diff===0) alertHTML=`<div class="ok">0</div>`;
+      else alertHTML=`<div class="ok">+${c.diff}</div>`;
+    }
+
+    card.innerHTML=`
+      ${totalBadge}
+      <div class="title">${c.name}</div>
+      ${seuilHTML}
+      <div class="effectif">
+        <div><span class="dot d0"></span>D0 : ${c.d0}</div>
+        <div><span class="dot d8"></span>D8 : ${c.d8}</div>
+        <div><span class="dot d20"></span>D20 : ${c.d20}</div>
+        <div><span class="dot d30"></span>D30 : ${c.d30}</div>
+        <div><span class="dot inter"></span>INTER : ${c.inter}</div>
+      </div>
+      ${alertHTML}
+    `;
+
+    grid.appendChild(card);
+  });
+
+}
+
+</script>
+</body>
+</html>

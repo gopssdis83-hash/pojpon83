@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin UF V2</title>
+<style>
+
+:root{
+  --bg:#161b22;
+  --panel:#21262d;
+  --panel2:#2d333b;
+  --border:#3d444d;
+  --blue:#58a6ff;
+  --green:#2ea043;
+  --red:#f85149;
+  --text:#f0f6fc;
+  --muted:#8b949e;
+}
+
+body{
+  margin:0;
+  padding:20px;
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Segoe UI",Arial,sans-serif;
+}
+
+h1{
+  margin:0 0 20px 0;
+  font-size:30px;
+  color:var(--blue);
+}
+
+.toolbar{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:center;
+  padding:15px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  margin-bottom:20px;
+  box-shadow:0 4px 12px rgba(0,0,0,.3);
+}
+
+input{
+  border:none;
+  border-radius:8px;
+  padding:10px;
+  background:var(--panel2);
+  color:white;
+}
+
+input:focus{
+  outline:2px solid var(--blue);
+}
+
+#search{
+  min-width:280px;
+}
+
+button{
+  border:none;
+  border-radius:8px;
+  padding:10px 14px;
+  font-weight:bold;
+  color:white;
+  cursor:pointer;
+  transition:.15s;
+}
+
+button:hover{
+  transform:translateY(-1px);
+}
+
+.addBtn{
+  background:var(--green);
+}
+
+.exportBtn{
+  background:#1f6feb;
+}
+
+.deleteBtn{
+  background:var(--black);
+}
+
+#info{
+  margin-left:auto;
+  color:var(--blue);
+  font-weight:bold;
+}
+
+.table-container{
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 4px 12px rgba(0,0,0,.3);
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  background:var(--panel);
+}
+
+th{
+  background:#30363d;
+  color:var(--blue);
+  position:sticky;
+  top:0;
+  z-index:2;
+}
+
+th,td{
+  border:1px solid var(--border);
+  padding:8px;
+  text-align:center;
+}
+
+tbody tr:nth-child(even){
+  background:#262c36;
+}
+
+tbody tr:hover{
+  background:#343b47;
+}
+
+.name{
+  width:100%;
+  text-align:left;
+}
+
+.num{
+  width:70px;
+  text-align:center;
+  font-weight:bold;
+}
+
+.num[value="0"]{
+  color:#ff7b72;
+}
+
+.modified{
+  background:#4d3f00 !important;
+}
+
+</style>
+</head>
+<body>
+<h1>📊 Admin UF V2</h1>
+
+<div class="toolbar">
+
+<input type="file" id="fileInput" accept=".js">
+
+<input
+  type="text"
+  id="search"
+  placeholder="🔎 Rechercher une UF">
+
+<button class="addBtn" onclick="addUF()">
+➕ Ajouter UF
+</button>
+
+<button class="exportBtn" onclick="exportFile()">
+💾 Exporter
+</button>
+
+<span id="info">
+Aucun fichier chargé
+</span>
+
+</div>
+
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th>UF</th><th>Jour</th><th>Nuit</th>
+<th>Mini J</th><th>Mini N</th>
+<th>Cible J</th><th>Cible N</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+
+<script>
+let data={};
+let variableName='ufData';
+let exportName='ufdata.js';
+
+document.getElementById('fileInput').addEventListener('change',e=>{
+ const file=e.target.files[0];
+ if(!file) return;
+ exportName=file.name;
+
+ const r=new FileReader();
+ r.onload=()=>{
+   let txt=r.result;
+
+   variableName = txt.includes('window.ufData2') ? 'ufData2':'ufData';
+
+   txt=txt.replace(/window\.ufData2\s*=\s*/,'')
+          .replace(/window\.ufData\s*=\s*/,'')
+          .trim();
+
+   if(txt.endsWith(';')) txt=txt.slice(0,-1);
+
+   try{
+     data=eval('('+txt+')');
+     render();
+     info.textContent=Object.keys(data).length+' UF chargées';
+   }catch(err){
+     alert(err);
+   }
+ };
+ r.readAsText(file);
+});
+
+search.addEventListener('input',render);
+
+function render(){
+ const q=search.value.toLowerCase();
+ tbody.innerHTML='';
+
+ Object.keys(data).sort().forEach(name=>{
+
+  if(q && !name.toLowerCase().includes(q)) return;
+
+  const d=data[name];
+
+  const tr=document.createElement('tr');
+  tr.dataset.uf=name;
+
+  tr.innerHTML=`
+   <td><input class="name ufname" value="${escapeHtml(name)}"></td>
+   <td><input class="num jour" type="number" value="${d.jour||0}"></td>
+   <td><input class="num nuit" type="number" value="${d.nuit||0}"></td>
+   <td><input class="num minij" type="number" value="${d.mini?.jour||0}"></td>
+   <td><input class="num minin" type="number" value="${d.mini?.nuit||0}"></td>
+   <td><input class="num ciblej" type="number" value="${d.cible?.jour||0}"></td>
+   <td><input class="num ciblen" type="number" value="${d.cible?.nuit||0}"></td>
+   <td><button class="deleteBtn" onclick="removeUF(this)">❌</button></td>
+  `;
+
+  tbody.appendChild(tr);
+ });
+}
+
+function removeUF(btn){
+ btn.closest('tr').remove();
+}
+
+function addUF(){
+ const tr=document.createElement('tr');
+ tr.innerHTML=`
+   <td><input class="name ufname" value="Nouvelle UF"></td>
+   <td><input class="num jour" type="number" value="0"></td>
+   <td><input class="num nuit" type="number" value="0"></td>
+   <td><input class="num minij" type="number" value="0"></td>
+   <td><input class="num minin" type="number" value="0"></td>
+   <td><input class="num ciblej" type="number" value="0"></td>
+   <td><input class="num ciblen" type="number" value="0"></td>
+   <td><button onclick="removeUF(this)">🗑</button></td>`;
+ tbody.prepend(tr);
+}
+
+function readTable(){
+
+ const result={};
+
+ document.querySelectorAll('#tbody tr').forEach(tr=>{
+
+   const name=tr.querySelector('.ufname').value.trim();
+   if(!name) return;
+
+   result[name]={
+      jour:+tr.querySelector('.jour').value||0,
+      nuit:+tr.querySelector('.nuit').value||0,
+      mini:{
+        jour:+tr.querySelector('.minij').value||0,
+        nuit:+tr.querySelector('.minin').value||0
+      },
+      cible:{
+        jour:+tr.querySelector('.ciblej').value||0,
+        nuit:+tr.querySelector('.ciblen').value||0
+      }
+   };
+ });
+
+ return result;
+}
+
+function exportFile(){
+
+ const obj=readTable();
+
+ let out='window.'+variableName+' = {\n\n';
+
+ const names=Object.keys(obj).sort();
+
+ names.forEach((n,i)=>{
+
+   const d=obj[n];
+
+   out += '  "'+n.replaceAll('"','\\"')+'": { jour: '+d.jour+
+          ', nuit: '+d.nuit+
+          ', mini: { jour: '+d.mini.jour+', nuit: '+d.mini.nuit+' }'+
+          ', cible: { jour: '+d.cible.jour+', nuit: '+d.cible.nuit+' } }';
+
+   if(i<names.length-1) out+=',';
+   out+='\n';
+ });
+
+ out+='\n};';
+
+ const blob=new Blob([out],{type:'text/javascript'});
+ const a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);
+ a.download=exportName;
+ a.click();
+}
+
+function escapeHtml(str){
+ return str.replace(/"/g,'&quot;');
+}
+</script>
+</table>
+</div>
+</body>
+</html>
